@@ -1,0 +1,800 @@
+# Manufacturing Data Lakehouse
+## Project Requirements & Technical Design Document
+
+**Version:** 1.0  
+**Project Type:** Enterprise Data Engineering  
+**Domain:** Heavy Equipment Manufacturing  
+**Development Environment:** Windows – Local Development  
+**Architecture:** Medallion Lakehouse (Bronze, Silver, Gold)  
+**Primary Processing Engine:** Apache Spark (PySpark)  
+**Storage Format:** Parquet and Delta Lake  
+**Status:** Project Planning / Initial Development
+
+---
+
+# 1. Executive Summary
+
+The Manufacturing Data Lakehouse is an end-to-end Data Engineering project designed to consolidate data from multiple manufacturing operational systems into a centralised analytical platform.
+
+A manufacturing enterprise operates multiple factories and uses independent systems to manage production, inventory, machinery, quality inspections and maintenance.
+
+These systems generate substantial volumes of structured and semi-structured data. However, the information is distributed across different databases and file formats, making consolidated reporting and business analysis difficult.
+
+The proposed solution introduces a centralised Data Lakehouse that:
+
+- Collects data from multiple independent sources.
+- Stores raw data in a centralised storage layer.
+- Processes and cleans data using PySpark.
+- Organises data into Bronze, Silver and Gold layers.
+- Supports incremental data ingestion.
+- Provides reliable, analytics-ready datasets.
+- Enables manufacturing performance analysis.
+- Supports future batch and streaming workloads.
+
+The project will initially run on a local Windows development environment and will be designed to support future cloud deployment.
+
+# 2. Business Scenario
+
+Consider a heavy equipment manufacturing company operating five manufacturing facilities.
+
+The company manufactures industrial machinery and equipment using different production lines.
+
+Each facility maintains operational information through independent systems.
+
+For example:
+
+| Operational system | Information maintained |
+|---|---|
+| Production Management | Production orders and manufacturing output |
+| Inventory Management | Raw materials, components and stock levels |
+| Machine Monitoring | Machine temperature, vibration and operational status |
+| Quality Management | Product inspections and defects |
+| Maintenance Management | Machine breakdowns, repairs and maintenance costs |
+
+Currently, management cannot easily obtain a consolidated view of manufacturing operations.
+
+The company wants a centralised platform that integrates these datasets and provides consistent, reliable information for business analysis.
+
+Our Manufacturing Data Lakehouse will solve this problem.
+
+# 3. Business Objectives
+
+The primary objectives are:
+
+1. Integrate data from multiple operational systems.
+2. Establish a centralised data storage architecture.
+3. Implement scalable data ingestion and processing pipelines.
+4. Standardise and validate incoming data.
+5. Implement incremental data processing.
+6. Create analytics-ready datasets.
+7. Improve visibility into manufacturing operations.
+8. Establish reliable and maintainable Data Engineering workflows.
+9. Prepare the architecture for future cloud and AI integration.
+
+# 4. Project Scope
+
+## 4.1 Included in Initial Scope
+
+- PostgreSQL source database.
+- CSV and JSON ingestion.
+- Python-based data ingestion.
+- PySpark transformations.
+- Parquet storage.
+- Delta Lake tables.
+- Bronze, Silver and Gold layers.
+- Data validation and cleansing.
+- Deduplication and null handling.
+- Incremental data ingestion.
+- Data modelling.
+- Pipeline logging and error handling.
+- Manufacturing analytical datasets.
+- Automated pipeline orchestration.
+- Local development and testing.
+
+## 4.2 Future Scope
+
+The following capabilities will be implemented after the core Lakehouse is operational:
+
+- Apache Airflow orchestration.
+- Kafka-based streaming ingestion.
+- Spark Structured Streaming.
+- Cloud deployment.
+- Advanced monitoring and observability.
+- Data governance and access control.
+- AI-powered manufacturing analytics.
+- RAG-based querying of manufacturing data.
+
+## 4.3 Out of Scope Initially
+
+- Training custom machine learning models.
+- Building a complete ERP system.
+- Developing a production-grade enterprise dashboard.
+- Deploying a multi-node production Spark cluster.
+- Implementing complex microservices.
+
+# 5. Technology Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Programming | Python 3.13 | Ingestion and utility development |
+| Database | PostgreSQL 17 | Source operational database |
+| Query Language | SQL | Data querying and modelling |
+| Processing | Apache Spark / PySpark | Distributed processing |
+| Storage | Local filesystem | Data Lake storage |
+| File Format | Apache Parquet | Columnar data storage |
+| Lakehouse | Delta Lake | Reliable transactional tables |
+| Orchestration | Apache Airflow | Pipeline scheduling |
+| Version Control | Git / GitHub | Source code management |
+| Containerisation | Docker | Environment management |
+| Testing | Pytest | Automated testing |
+| Visualisation | Streamlit | Optional analytical interface |
+
+Technology versions and dependencies must be pinned to mutually compatible releases before implementation.
+
+# 6. High-Level Architecture
+
+The system will follow a Medallion Lakehouse architecture.
+
+## 6.1 Master Architecture
+
+Data Sources → Data Ingestion → Bronze Layer → Silver Layer → Gold Layer → Data Consumption
+
+### Layer 1: Data Sources
+
+Independent operational systems:
+
+- Production Management System.
+- Inventory Management System.
+- Machine Monitoring System.
+- Quality Management System.
+- Maintenance Management System.
+
+### Layer 2: Data Ingestion
+
+Python will extract data from:
+
+- PostgreSQL databases.
+- CSV files.
+- JSON files.
+- Future APIs and streaming sources.
+
+Responsibilities:
+
+- Extract source records.
+- Validate source structure.
+- Capture ingestion timestamps.
+- Identify new or modified records.
+- Load data into the Bronze layer.
+- Record ingestion status and failures.
+
+### Layer 3: Bronze Layer
+
+The Bronze layer stores raw ingested data.
+
+Characteristics:
+
+- Preserves source information.
+- Maintains ingestion metadata.
+- Supports historical data retention.
+- Allows reprocessing.
+- Stores data in Delta Lake format.
+
+No unnecessary business transformations should be performed at this stage.
+
+### Layer 4: Silver Layer
+
+The Silver layer contains cleaned and standardised data.
+
+Responsibilities:
+
+- Handle missing values.
+- Remove duplicate records.
+- Validate data types.
+- Standardise timestamps.
+- Validate business rules.
+- Resolve inconsistent identifiers.
+- Apply necessary transformations.
+- Handle schema evolution.
+
+### Layer 5: Gold Layer
+
+The Gold layer contains business-ready datasets.
+
+Examples:
+
+- Daily Production Summary.
+- Factory Performance.
+- Inventory Availability.
+- Machine Utilisation.
+- Machine Downtime.
+- Product Defect Rates.
+- Maintenance Cost Analysis.
+
+The Gold layer will use appropriate fact and dimension modelling.
+
+### Layer 6: Data Consumption
+
+Gold datasets will be available for:
+
+- SQL queries.
+- Business intelligence dashboards.
+- Manufacturing reports.
+- Analytical applications.
+- Future AI-powered applications.
+
+# 7. Source Systems and Data Requirements
+
+Five source systems will be simulated.
+
+## 7.1 Production Management System
+
+Maintains manufacturing orders and production output.
+
+Entities:
+
+- Factory.
+- Product.
+- Production Order.
+- Production Record.
+
+Important attributes:
+
+- Order ID.
+- Factory ID.
+- Product ID.
+- Order Date.
+- Planned Quantity.
+- Actual Quantity.
+- Production Date.
+- Production Status.
+
+Business questions:
+
+- How many units were manufactured per factory?
+- Which products have the highest production volume?
+- Are production targets being achieved?
+- Which factories have production delays?
+
+## 7.2 Inventory Management System
+
+Maintains inventory and warehouse information.
+
+Entities:
+
+- Warehouse.
+- Inventory.
+- Inventory Transaction.
+- Product.
+
+Important attributes:
+
+- Transaction ID.
+- Product ID.
+- Warehouse ID.
+- Transaction Type.
+- Quantity.
+- Transaction Timestamp.
+- Available Stock.
+
+Business questions:
+
+- Which products have low inventory?
+- Which warehouses have stock shortages?
+- What is the inventory movement over time?
+- Which materials are consumed most frequently?
+
+## 7.3 Machine Monitoring System
+
+Collects machine sensor readings.
+
+Entities:
+
+- Machine.
+- Sensor Reading.
+- Factory.
+
+Important attributes:
+
+- Reading ID.
+- Machine ID.
+- Reading Timestamp.
+- Temperature.
+- Vibration.
+- Pressure.
+- Machine Status.
+- Runtime.
+
+Business questions:
+
+- Which machines operate outside normal thresholds?
+- Which factories experience frequent machine downtime?
+- What is the machine utilisation rate?
+- Are abnormal sensor readings associated with breakdowns?
+
+## 7.4 Quality Management System
+
+Maintains product inspection information.
+
+Entities:
+
+- Quality Inspection.
+- Product.
+- Production Order.
+
+Important attributes:
+
+- Inspection ID.
+- Product ID.
+- Order ID.
+- Inspection Date.
+- Defect Count.
+- Accepted Quantity.
+- Rejected Quantity.
+- Quality Status.
+
+Business questions:
+
+- What percentage of products are rejected?
+- Which products have the highest defect rates?
+- Which factories have the highest quality performance?
+
+## 7.5 Maintenance Management System
+
+Maintains machinery maintenance activities.
+
+Entities:
+
+- Maintenance Record.
+- Machine.
+- Factory.
+
+Important attributes:
+
+- Maintenance ID.
+- Machine ID.
+- Maintenance Type.
+- Start Timestamp.
+- End Timestamp.
+- Downtime.
+- Maintenance Cost.
+- Maintenance Status.
+
+Business questions:
+
+- Which machines require frequent maintenance?
+- What is the total maintenance cost?
+- Which factories experience the most downtime?
+- What is the average repair duration?
+
+# 8. Initial Data Model
+
+The following entities will form the initial source database.
+
+| Entity | Primary Key | Important Relationships |
+|---|---|---|
+| Factory | factory_id | Referenced by machines and orders |
+| Machine | machine_id | References factory |
+| Product | product_id | Referenced by orders and inspections |
+| Production Order | order_id | References factory and product |
+| Production Record | record_id | References production order |
+| Warehouse | warehouse_id | References factory |
+| Inventory Transaction | transaction_id | References product and warehouse |
+| Sensor Reading | reading_id | References machine |
+| Quality Inspection | inspection_id | References product and order |
+| Maintenance Record | maintenance_id | References machine |
+
+Detailed column definitions, constraints and relationship diagrams will be maintained in the database design specification.
+
+# 9. Data Generation Strategy
+
+Public datasets and synthetic datasets will be used.
+
+The initial implementation will generate realistic manufacturing data programmatically using Python.
+
+Initial target volumes:
+
+| Dataset | Target records |
+|---|---:|
+| Factories | 5 |
+| Machines | 100 |
+| Products | 500 |
+| Production Orders | 100,000 |
+| Inventory Transactions | 200,000 |
+| Sensor Readings | 1,000,000 |
+| Quality Inspections | 100,000 |
+| Maintenance Records | 20,000 |
+
+The generation process must preserve referential integrity.
+
+For example:
+
+- Every machine must belong to an existing factory.
+- Every production order must reference a valid product and factory.
+- Every sensor reading must reference an existing machine.
+- Every maintenance record must reference an existing machine.
+
+Data generation must support batch writing to avoid excessive memory consumption.
+
+Future datasets may scale to five or ten million sensor readings for performance experiments.
+
+# 10. Data Lake Storage Structure
+
+The initial directory structure:
+
+```text
+data/
+│
+├── source/
+│   ├── production/
+│   ├── inventory/
+│   ├── machine_monitoring/
+│   ├── quality/
+│   └── maintenance/
+│
+├── landing/
+│
+└── lakehouse/
+    │
+    ├── bronze/
+    │   ├── production/
+    │   ├── inventory/
+    │   ├── machine_monitoring/
+    │   ├── quality/
+    │   └── maintenance/
+    │
+    ├── silver/
+    │   ├── production/
+    │   ├── inventory/
+    │   ├── machine_monitoring/
+    │   ├── quality/
+    │   └── maintenance/
+    │
+    └── gold/
+        ├── production_summary/
+        ├── inventory_analytics/
+        ├── machine_performance/
+        ├── quality_metrics/
+        └── maintenance_analytics/
+```
+
+The exact storage paths will be configurable rather than hardcoded throughout the application.
+
+# 11. Data Pipeline Requirements
+
+## 11.1 Initial Batch Processing
+
+The initial system will support scheduled batch ingestion.
+
+Example:
+
+1. Source data becomes available.
+2. Python extracts the records.
+3. Ingestion metadata is generated.
+4. Raw records are written to Bronze.
+5. PySpark reads Bronze data.
+6. Transformations produce Silver datasets.
+7. Business aggregations produce Gold datasets.
+8. Data quality checks are executed.
+9. Pipeline execution status is recorded.
+
+## 11.2 Incremental Data Processing
+
+The pipeline must eventually support incremental loading.
+
+Instead of reprocessing all historical data, it should identify and process only newly inserted or modified records.
+
+Possible mechanisms:
+
+- Timestamp-based extraction.
+- Incrementing primary-key watermarks.
+- Change Data Capture.
+
+The initial implementation will use timestamp-based incremental extraction.
+
+## 11.3 Failure Handling
+
+The system should handle:
+
+- Database connection failures.
+- Invalid source records.
+- Duplicate data.
+- Missing columns.
+- Incorrect data types.
+- Failed transformations.
+- Partial pipeline execution.
+- Repeated ingestion attempts.
+
+Pipeline failures must be logged with enough information for investigation and recovery.
+
+# 12. Data Quality Requirements
+
+Data quality checks will be implemented progressively.
+
+Initial checks:
+
+- Primary key uniqueness.
+- Required column validation.
+- Null value validation.
+- Data type validation.
+- Referential integrity.
+- Duplicate detection.
+- Valid timestamp ranges.
+- Positive production quantities.
+- Non-negative inventory quantities.
+- Valid machine sensor ranges.
+
+Invalid records should be handled according to defined business rules rather than silently discarded.
+
+# 13. Performance and Reliability Requirements
+
+The system should demonstrate the following engineering capabilities:
+
+- Efficient file formats.
+- Appropriate partitioning.
+- Incremental processing.
+- Spark execution plan analysis.
+- Shuffle optimisation.
+- Broadcast joins.
+- Data skew handling.
+- Idempotent pipeline execution.
+- Error handling and retry mechanisms.
+- Data reconciliation.
+- Pipeline monitoring.
+
+Performance benchmarks should compare processing times under different configurations.
+
+# 14. Hardware and Development Constraints
+
+Development hardware:
+
+- Operating System: Windows.
+- Processor: Intel Core i7, 12th Generation.
+- RAM: 16 GB.
+- Available Disk Space: Approximately 120 GB.
+
+Development approach:
+
+- Local Spark execution.
+- Small initial datasets.
+- Batch-based data generation.
+- Memory-efficient processing.
+- Parquet and Delta storage.
+- Cloud deployment deferred.
+
+Spark memory and execution configurations must be tuned for the available hardware.
+
+# 15. Project Development Phases
+
+## Phase 1: Requirements and Architecture
+
+- Define business requirements.
+- Identify source systems.
+- Define data entities.
+- Establish architecture.
+- Create technical documentation.
+
+## Phase 2: Database Design and Data Generation
+
+- Design PostgreSQL schemas.
+- Create tables and relationships.
+- Generate synthetic manufacturing datasets.
+- Validate source data.
+
+## Phase 3: Python Data Ingestion
+
+- Develop source extraction scripts.
+- Implement CSV and JSON readers.
+- Connect to PostgreSQL.
+- Implement raw data ingestion.
+- Add logging and error handling.
+
+## Phase 4: Bronze and Silver Processing
+
+- Implement Delta Lake.
+- Load raw records.
+- Develop PySpark transformations.
+- Implement data cleansing.
+- Handle duplicates and null values.
+- Introduce schema evolution.
+
+## Phase 5: Gold Data Modelling
+
+- Design fact and dimension tables.
+- Implement business aggregations.
+- Create manufacturing KPIs.
+- Validate analytical datasets.
+
+## Phase 6: Advanced PySpark
+
+- Optimise joins.
+- Implement partitioning.
+- Understand shuffling.
+- Handle data skew.
+- Analyse execution plans.
+- Benchmark performance.
+
+## Phase 7: Orchestration
+
+- Introduce Apache Airflow.
+- Develop DAGs.
+- Schedule pipelines.
+- Manage dependencies.
+- Implement retries and backfills.
+
+## Phase 8: Production Engineering
+
+- Introduce Docker.
+- Implement automated tests.
+- Improve logging and monitoring.
+- Implement configuration management.
+- Document deployment.
+
+## Phase 9: Advanced Extensions
+
+- Kafka ingestion.
+- Structured Streaming.
+- Cloud deployment.
+- Advanced data governance.
+- AI integration.
+
+# 16. Testing Strategy
+
+Testing will cover multiple levels.
+
+**Unit Testing**
+- Individual Python functions.
+- Data transformation functions.
+- Validation rules.
+
+**Integration Testing**
+- PostgreSQL connectivity.
+- Source extraction.
+- Bronze ingestion.
+- Silver transformations.
+- Gold dataset generation.
+
+**Data Quality Testing**
+- Duplicate records.
+- Null values.
+- Invalid data types.
+- Referential integrity.
+- Business rule violations.
+
+**Performance Testing**
+- Processing time.
+- Dataset size.
+- Partition count.
+- Shuffle behaviour.
+- Memory utilisation.
+
+**Failure Testing**
+- Database unavailable.
+- Invalid input files.
+- Interrupted processing.
+- Repeated ingestion.
+- Schema changes.
+
+# 17. Repository Structure
+
+The planned source repository:
+
+```text
+manufacturing-data-lakehouse/
+│
+├── docs/
+│   ├── requirements.md
+│   ├── architecture.md
+│   ├── data-model.md
+│   └── decisions.md
+│
+├── config/
+│
+├── data/
+│   ├── source/
+│   ├── landing/
+│   └── lakehouse/
+│       ├── bronze/
+│       ├── silver/
+│       └── gold/
+│
+├── src/
+│   └── manufacturing_lakehouse/
+│       ├── ingestion/
+│       ├── transformations/
+│       ├── quality/
+│       └── utils/
+│
+├── scripts/
+├── tests/
+├── notebooks/
+│
+├── requirements.txt
+├── .gitignore
+└── README.md
+```
+
+Generated datasets, virtual environments, secrets and large data files must not be committed to Git.
+
+# 18. Final Deliverables
+
+The completed project should contain:
+
+1. Documented business requirements.
+2. Architecture documentation.
+3. PostgreSQL source database.
+4. Synthetic manufacturing data generator.
+5. Python ingestion framework.
+6. Bronze, Silver and Gold Lakehouse.
+7. PySpark transformation pipelines.
+8. Delta Lake tables.
+9. Incremental ingestion framework.
+10. Data quality framework.
+11. Airflow orchestration.
+12. Automated tests.
+13. Performance benchmarks.
+14. Deployment instructions.
+15. Technical documentation.
+16. Optional manufacturing analytics dashboard.
+
+# 19. Definition of Done
+
+The project will be considered functionally complete when:
+
+- All five source systems can supply data.
+- Data can be ingested into Bronze.
+- Bronze data can be transformed into Silver.
+- Gold datasets can be generated.
+- Incremental ingestion works correctly.
+- Duplicate records are handled.
+- Data quality checks are operational.
+- Failed pipelines can be investigated and recovered.
+- Spark transformations can be analysed and optimised.
+- Pipelines can be orchestrated.
+- The application can be reproduced from documented setup instructions.
+
+# 20. Learning Objectives
+
+This project is also intended to develop practical Data Engineering expertise.
+
+By completing it, the developer should understand:
+
+- Relational databases and data modelling.
+- Data Warehousing.
+- ETL and ELT.
+- Data Lakes and Lakehouse architecture.
+- Apache Parquet and Delta Lake.
+- Distributed computing.
+- Apache Spark and PySpark.
+- Batch and incremental ingestion.
+- Data pipeline architecture.
+- Orchestration.
+- Data quality and reliability.
+- Performance optimisation.
+- Data Engineering system design.
+- Production engineering practices.
+
+The project should prioritise understanding architectural decisions and implementation trade-offs rather than simply completing a list of technologies.
+
+---
+
+# 21. Implementation Roadmap Status
+
+| Milestone | Description | Status |
+|---|---|---|
+| 1 | Requirements and architecture | Designed |
+| 2 | Database design and data generation | Pending |
+| 3 | Python ingestion | Pending |
+| 4 | Bronze and Silver layers | Pending |
+| 5 | Gold layer | Pending |
+| 6 | Advanced PySpark | Pending |
+| 7 | Airflow orchestration | Pending |
+| 8 | Production engineering | Pending |
+| 9 | Advanced extensions | Pending |
+
+**Immediate next step:** Complete Milestone 2 — design the PostgreSQL source schemas, define relationships and generate realistic manufacturing datasets.
+
+---
+
+**Document ownership:** Manufacturing Data Lakehouse Project  
+**Document purpose:** Master reference for requirements, architecture, implementation and learning objectives.  
+**Version control:** All material changes to architecture and requirements should be recorded in the project documentation and decision log.
