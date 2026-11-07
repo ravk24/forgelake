@@ -1,7 +1,8 @@
-# Manufacturing Data Lakehouse
+# ForgeLake: Manufacturing Data Lakehouse
 ## Project Requirements & Technical Design Document
 
-**Version:** 1.0  
+**Version:** 1.1 (2026-11-07: architecture decisions AD-1 to AD-7 incorporated; see Section 22)
+**Package name:** `forgelake` (repository: `forge-lake`)
 **Project Type:** Enterprise Data Engineering  
 **Domain:** Heavy Equipment Manufacturing  
 **Development Environment:** Windows – Local Development  
@@ -88,7 +89,7 @@ The primary objectives are:
 - Data modelling.
 - Pipeline logging and error handling.
 - Manufacturing analytical datasets.
-- Automated pipeline orchestration.
+- Pipeline execution through a Python runner, starting simple and later becoming dependency-aware (AD-5). Workflow orchestration with Airflow is future scope.
 - Local development and testing.
 
 ## 4.2 Future Scope
@@ -123,13 +124,16 @@ The following capabilities will be implemented after the core Lakehouse is opera
 | Storage | Local filesystem | Data Lake storage |
 | File Format | Apache Parquet | Columnar data storage |
 | Lakehouse | Delta Lake | Reliable transactional tables |
-| Orchestration | Apache Airflow | Pipeline scheduling |
+| Pipeline execution | Python runner | Initial pipeline execution (AD-5) |
+| Orchestration | Apache Airflow | Future: pipeline scheduling (needs Docker or WSL2) |
 | Version Control | Git / GitHub | Source code management |
-| Containerisation | Docker | Environment management |
+| Containerisation | Docker / WSL2 | Fallback runtime for Spark if native Windows fails (AD-6); Airflow later |
 | Testing | Pytest | Automated testing |
 | Visualisation | Streamlit | Optional analytical interface |
 
-Technology versions and dependencies must be pinned to mutually compatible releases before implementation.
+Technology versions and dependencies must be pinned to mutually compatible releases before implementation. The environment spike (Milestone 0, AD-6) finds and pins these versions.
+
+Verified on the development machine (2026-11-07): Python 3.13.5 and OpenJDK 17.0.20.1 are installed. `JAVA_HOME` and `HADOOP_HOME` are not set. The Docker CLI is installed, but its engine was not running. WSL2 is available, with Ubuntu-24.04 installed.
 
 # 6. High-Level Architecture
 
@@ -137,7 +141,26 @@ The system will follow a Medallion Lakehouse architecture.
 
 ## 6.1 Master Architecture
 
-Data Sources → Data Ingestion → Bronze Layer → Silver Layer → Gold Layer → Data Consumption
+Data Sources → Python Extraction → Landing (immutable batches) → Spark → Bronze Layer → Silver Layer → Gold Layer → Data Consumption
+
+```text
+ SOURCES                      EXTRACTION (Python)          LANDING              LAKEHOUSE (PySpark + Delta Lake)
++---------------------------+
+| PostgreSQL                |
+|  production schema        |  watermark: updated_at > last - overlap
+|  inventory schema         |----+
+|  maintenance schema       |    |   +-------------------+   +-------------+   +--------+   +--------+   +------+
++---------------------------+    +-->| batched extract   |-->| data/       |-->| BRONZE |-->| SILVER |-->| GOLD |
+| CSV  (quality: nightly    |----+   | + batch metadata  |   | landing/    |   | raw +  |   | clean, |   | facts|
+|       inspection export)  |    |   | + watermark state |   | one folder  |   | ingest |   | dedup, |   | dims,|
++---------------------------+    |   +-------------------+   | per batch,  |   | meta,  |   | conform|   | KPIs |
+| JSON (sensors: nested,    |----+                           | never       |   | dirt   |   | soft-  |   |      |
+|       high-volume events) |                                | rewritten   |   | kept   |   | delete |   |      |
++---------------------------+                                +------+------+   +--------+   +--------+   +------+
+                                                                    |              ^
+                                                                    +-- replay ----+  (re-run Bronze without
+                                                                                        querying the source)
+```
 
 ### Layer 1: Data Sources
 
@@ -160,12 +183,14 @@ Python will extract data from:
 
 Responsibilities:
 
-- Extract source records.
+- Extract source records, reading PostgreSQL in batches rather than loading whole tables into memory.
 - Validate source structure.
 - Capture ingestion timestamps.
-- Identify new or modified records.
-- Load data into the Bronze layer.
-- Record ingestion status and failures.
+- Identify new or modified records using a watermark with an overlap window (AD-2).
+- Write each extraction as an immutable batch in `data/landing/` (AD-4).
+- Record ingestion status, watermark state and failures.
+
+Spark, not Python, reads landed batches and writes Bronze Delta tables. This gives the pipeline a recovery point: if Spark fails, the batch can be replayed from landing without querying the source again.
 
 ### Layer 3: Bronze Layer
 
@@ -179,7 +204,7 @@ Characteristics:
 - Allows reprocessing.
 - Stores data in Delta Lake format.
 
-No unnecessary business transformations should be performed at this stage.
+No unnecessary business transformations should be performed at this stage. Dirty data, such as duplicates, bad identifiers and invalid values, is preserved in Bronze and resolved in Silver (AD-3). Bronze ingestion must be idempotent: re-ingesting the same landing batch must not create duplicates.
 
 ### Layer 4: Silver Layer
 
@@ -224,7 +249,17 @@ Gold datasets will be available for:
 
 # 7. Source Systems and Data Requirements
 
-Five source systems will be simulated.
+Five source systems will be simulated (AD-1).
+
+| Source system | Technology | Data | Owns master data | Change detection |
+|---|---|---|---|---|
+| Production | PostgreSQL schema `production` | Production orders, production records | Factory, Product | `updated_at` watermark |
+| Inventory | PostgreSQL schema `inventory` | Warehouses, inventory transactions | Warehouse | `updated_at` watermark |
+| Quality | CSV files | Inspection records (simulated nightly export) | none | New export files |
+| Maintenance | PostgreSQL schema `maintenance` | Maintenance records | Machine | `updated_at` watermark |
+| Machine Monitoring | JSON files | High-volume nested sensor readings | none | New files; `event_id` deduplication |
+
+The three PostgreSQL systems run in one local PostgreSQL instance, but each gets its own schema so they behave like independent operational systems. Each master entity has exactly one owning system. Other systems refer to it by ID only and keep no copy. For example, the Inventory system refers to `product_id` but does not own a product table.
 
 ## 7.1 Production Management System
 
@@ -383,6 +418,18 @@ The following entities will form the initial source database.
 | Quality Inspection | inspection_id | References product and order |
 | Maintenance Record | maintenance_id | References machine |
 
+Ownership and storage, following AD-1:
+
+| Entity | Owning system | Stored as |
+|---|---|---|
+| Factory, Product, Production Order, Production Record | Production | PostgreSQL `production` |
+| Warehouse, Inventory Transaction | Inventory | PostgreSQL `inventory` |
+| Machine, Maintenance Record | Maintenance | PostgreSQL `maintenance` |
+| Quality Inspection | Quality | CSV |
+| Sensor Reading | Machine Monitoring | JSON |
+
+Every mutable PostgreSQL table has `created_at`, `updated_at` and `is_deleted` columns (AD-2). Rows are soft-deleted, never hard-deleted. Each sensor event carries an `event_id` and an `event_timestamp`. The pipeline adds an `ingestion_timestamp` when it ingests the event.
+
 Detailed column definitions, constraints and relationship diagrams will be maintained in the database design specification.
 
 # 9. Data Generation Strategy
@@ -414,6 +461,33 @@ For example:
 - Every maintenance record must reference an existing machine.
 
 Data generation must support batch writing to avoid excessive memory consumption.
+
+The generator must be deterministic (`--seed`) and must simulate change over time, not just one static load (AD-2):
+
+| Run | Scenario |
+|---|---|
+| 1 | Initial full load |
+| 2 | New records inserted |
+| 3 | Existing records updated |
+| 4 | Late-arriving records |
+| 5 | Soft-deleted records |
+| 6 | Re-running the same batch, which must be idempotent |
+
+It must also support configurable corruption, plus a clean mode that turns corruption off (AD-3):
+
+```text
+python scripts/generate_data.py --dirty-rate 0.02 --seed 42
+```
+
+| Data issue | Example |
+|---|---|
+| Duplicate records | Same `inspection_id` twice |
+| Inconsistent IDs | `FAC-001` vs `fac_1` |
+| Missing values | Null `product_id` |
+| Invalid quantities | -50 units |
+| Invalid sensors | Temperature beyond permitted range |
+| Mixed time zones | UTC and local timestamps |
+| Schema drift | New optional JSON fields |
 
 Future datasets may scale to five or ten million sensor readings for performance experiments.
 
@@ -468,14 +542,16 @@ The initial system will support scheduled batch ingestion.
 Example:
 
 1. Source data becomes available.
-2. Python extracts the records.
+2. Python extracts the records in batches.
 3. Ingestion metadata is generated.
-4. Raw records are written to Bronze.
-5. PySpark reads Bronze data.
+4. Each extraction is written to `data/landing/` as an immutable batch.
+5. Spark reads the landed batch and writes Bronze Delta tables.
 6. Transformations produce Silver datasets.
 7. Business aggregations produce Gold datasets.
 8. Data quality checks are executed.
 9. Pipeline execution status is recorded.
+
+A Python runner executes these steps (AD-5). It starts as a simple sequential runner and later becomes dependency-aware. Airflow DAGs come only after the pipeline's dependencies are understood (Milestone 8).
 
 ## 11.2 Incremental Data Processing
 
@@ -489,7 +565,14 @@ Possible mechanisms:
 - Incrementing primary-key watermarks.
 - Change Data Capture.
 
-The initial implementation will use timestamp-based incremental extraction.
+The initial implementation will use timestamp-based incremental extraction (AD-2), hardened as follows:
+
+- **Overlap window.** Extract rows where `updated_at > last_watermark - overlap`, so rows committed late around the boundary are not missed.
+- **Stable primary keys and deterministic deduplication.** Because of the overlap, a row can be extracted twice. A rule based on the key plus the latest `updated_at` collapses the copies.
+- **Soft deletes.** `is_deleted = true` is an ordinary update, so the watermark picks it up and the delete propagates to Silver.
+- **Known limitation.** A hard delete cannot be detected without CDC or a separate deletion feed. Source systems must therefore never hard-delete.
+- **Sensor JSON.** `event_id` identifies duplicate events. Comparing `event_timestamp` with `ingestion_timestamp` identifies late arrivals.
+- **Quality CSV.** Each nightly export file is one unit of change. The pipeline tracks which files have been processed.
 
 ## 11.3 Failure Handling
 
@@ -564,6 +647,15 @@ Development approach:
 Spark memory and execution configurations must be tuned for the available hardware.
 
 # 15. Project Development Phases
+
+Note: Section 21 holds the authoritative implementation order (revised in v1.1). The phases below describe what each area of work contains.
+
+## Phase 0: Environment Compatibility Spike (AD-6)
+
+- Pin mutually compatible Python, PySpark, delta-spark and Java versions.
+- Start a local Spark session and create a DataFrame.
+- Write a Delta table, read it back, run a Delta `MERGE`, and verify the updated records.
+- If native Windows causes filesystem or Hadoop (winutils) problems, move Spark execution to WSL2 or Docker instead of debugging Windows.
 
 ## Phase 1: Requirements and Architecture
 
@@ -679,7 +771,7 @@ Testing will cover multiple levels.
 The planned source repository:
 
 ```text
-manufacturing-data-lakehouse/
+forge-lake/
 │
 ├── docs/
 │   ├── requirements.md
@@ -698,7 +790,7 @@ manufacturing-data-lakehouse/
 │       └── gold/
 │
 ├── src/
-│   └── manufacturing_lakehouse/
+│   └── forgelake/
 │       ├── ingestion/
 │       ├── transformations/
 │       ├── quality/
@@ -729,7 +821,7 @@ The completed project should contain:
 8. Delta Lake tables.
 9. Incremental ingestion framework.
 10. Data quality framework.
-11. Airflow orchestration.
+11. Python pipeline runner, followed by Airflow orchestration.
 12. Automated tests.
 13. Performance benchmarks.
 14. Deployment instructions.
@@ -779,22 +871,40 @@ The project should prioritise understanding architectural decisions and implemen
 
 # 21. Implementation Roadmap Status
 
+Revised in v1.1. Each milestone becomes one OpenSpec change (`/opsx:propose`).
+
 | Milestone | Description | Status |
 |---|---|---|
-| 1 | Requirements and architecture | Designed |
-| 2 | Database design and data generation | Pending |
-| 3 | Python ingestion | Pending |
-| 4 | Bronze and Silver layers | Pending |
-| 5 | Gold layer | Pending |
-| 6 | Advanced PySpark | Pending |
-| 7 | Airflow orchestration | Pending |
-| 8 | Production engineering | Pending |
-| 9 | Advanced extensions | Pending |
+| — | Requirements and architecture (v1.1 decisions) | Designed |
+| 0 | Environment compatibility spike: Python, Java, PySpark and Delta Lake on Windows | **Next** |
+| 1 | Source schema design: PostgreSQL schemas, CSV specification, JSON schema, relationships | Pending |
+| 2 | Synthetic data generator: volumes, dirty data, updates, late arrivals, soft deletes | Pending |
+| 3 | Landing and Bronze ingestion: Python extraction, immutable batches, Spark Delta writes | Pending |
+| 4 | Silver cleansing: deduplication, type correction, validation, standardisation | Pending |
+| 5 | Gold modelling: facts, dimensions, manufacturing KPIs | Pending |
+| 6 | Incremental processing and data quality: watermarks, idempotency, deletes, reconciliation | Pending |
+| 7 | Performance engineering: partitioning, shuffle, joins, execution plans, benchmarks | Pending |
+| 8 | Orchestration and deployment: Airflow, Docker, testing, monitoring | Pending |
+| 9 | Advanced extensions: Kafka, Structured Streaming, cloud, AI | Pending |
 
-**Immediate next step:** Complete Milestone 2 — design the PostgreSQL source schemas, define relationships and generate realistic manufacturing datasets.
+**Immediate next step:** Milestone 0. Prove that PySpark and Delta Lake (write, read, `MERGE`) work on this machine, and pin the versions that work, before designing schemas.
+
+# 22. Architecture Decision Log
+
+| ID | Area | Decision | Rationale |
+|---|---|---|---|
+| AD-1 | Source systems | Production, Inventory and Maintenance in PostgreSQL, each in its own schema. Quality as CSV. Sensors as JSON. Each master entity has one owning system. | JSON suits nested, high-volume sensor data. CSV brings type-guessing and schema drift. Separate schemas imitate independent systems while running on one database. |
+| AD-2 | Incremental loading | `created_at`, `updated_at` and `is_deleted` on every mutable table. Watermark with an overlap window. Stable keys and deterministic deduplication. Event IDs for sensor data. | A timestamp watermark alone misses boundary rows and hard deletes. Incremental loading has to be designed into the source data. |
+| AD-3 | Dirty data | The generator takes `--dirty-rate` and `--seed` and also has a clean mode. Dirt is preserved in Bronze and resolved in Silver. | Silver and the data quality checks need real failures to catch. |
+| AD-4 | Bronze writer | Python extracts to landing, then Spark writes Bronze. Direct JDBC ingestion can be studied later. | Batches can be replayed without the source, gives a recovery point, and handles PostgreSQL, CSV and JSON the same way. |
+| AD-5 | Orchestration | A Python runner first, then dependency-aware execution, then Airflow. | Understand pipeline dependencies before adopting a scheduler. Airflow needs Docker or WSL on Windows. |
+| AD-6 | Windows risk | The environment spike runs before any other development. Fall back to WSL2 or Docker rather than debug Windows. | PySpark, Delta, Java and winutils compatibility is the biggest technical risk. |
+| AD-7 | Naming | Repository `forge-lake`, Python package `forgelake`. | Matches the project name. |
+
+**Guiding principle:** every feature must solve a real Data Engineering problem and demonstrate a concept that matters in production. Partition tables only when query patterns and data volume justify it. Introduce Kafka only for a real streaming requirement. Introduce Airflow only once pipeline dependencies are understood. Use large volumes only to answer a performance question, not to claim Big Data experience.
 
 ---
 
-**Document ownership:** Manufacturing Data Lakehouse Project  
+**Document ownership:** ForgeLake: Manufacturing Data Lakehouse Project
 **Document purpose:** Master reference for requirements, architecture, implementation and learning objectives.  
 **Version control:** All material changes to architecture and requirements should be recorded in the project documentation and decision log.
