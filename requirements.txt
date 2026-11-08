@@ -2,4 +2,6 @@
 # delta-spark 4.4.1 declares pyspark >=4.0.1,<=4.2.0 ; 4.2.0 is the newest compatible PySpark.
 pyspark==4.2.0
 delta-spark==4.4.1
+# PostgreSQL driver for the source systems; the binary extra bundles libpq (reads ~/.pgpass).
+psycopg[binary]==3.3.8
 pytest==8.3.5

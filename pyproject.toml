@@ -14,4 +14,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-markers = ["spark: tests that start a local Spark session (slow)"]
+markers = [
+    "spark: tests that start a local Spark session (slow)",
+    "postgres: tests that need the PostgreSQL test database (forgelake_source_test)",
+]

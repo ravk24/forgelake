@@ -78,8 +78,84 @@ Test suite:
 
 ```bash
 .venv/bin/python -m pytest              # everything (~30 s)
-.venv/bin/python -m pytest -m "not spark"   # fast, no JVM
+.venv/bin/python -m pytest -m "not postgres and not spark"   # fast: no JVM, no database
 ```
+
+## PostgreSQL access
+
+The source systems (Milestone 1) use the PostgreSQL 17 service that already runs on Windows (`postgresql-x64-17`). Its `pg_hba.conf` only admits loopback connections, so WSL must reach it through the Windows loopback.
+
+### Networking: WSL mirrored mode
+
+In the default NAT mode, WSL can't reach the Windows service. Switch WSL to mirrored networking by creating or editing `%UserProfile%\.wslconfig` on **Windows**:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+Then restart WSL from PowerShell and check:
+
+```powershell
+wsl --shutdown
+wsl -d Ubuntu-24.04 -- wslinfo --networking-mode    # mirrored
+```
+
+From Ubuntu, the port must be open:
+
+```bash
+timeout 3 bash -c '</dev/tcp/127.0.0.1/5432' && echo open
+```
+
+The restart doesn't affect Spark. After the switch, `scripts/check_env.py` passed 3 times out of 3 and the full suite passed (verified 2026-11-08).
+
+**Revert:** remove the `networkingMode` line and run `wsl --shutdown`.
+
+**Fallback (not used):** if mirrored mode ever breaks something, stay on NAT instead. Add `host all forgelake 172.16.0.0/12 scram-sha-256` to `C:\Program Files\PostgreSQL\17\data\pg_hba.conf`, add a Windows Firewall inbound rule for TCP 5432 on the WSL interface, and set `FORGELAKE_PG_HOST` to the WSL gateway address (`ip route show default`).
+
+### Role and databases (one-time, needs the `postgres` password)
+
+Server: PostgreSQL 17.11 (`SHOW server_version`, verified 2026-11-08).
+
+From **Windows PowerShell** (`psql.exe` is on `PATH` with the PostgreSQL installer):
+
+```powershell
+psql -U postgres -h 127.0.0.1 -f "\\wsl.localhost\Ubuntu-24.04\home\ravk_linux\forge-lake\sql\admin\create_role_and_databases.sql"
+```
+
+It asks first for the `postgres` password, then twice for a new password for the role `forgelake` (psql's `\password`, so the input is hidden and only a SCRAM hash reaches the server). The script creates:
+
+- role `forgelake`: `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE`
+- databases `forgelake_source` (development) and `forgelake_source_test` (automated tests only), both UTF8 and owned by `forgelake`
+- `CONNECT` and `TEMPORARY` revoked from `PUBLIC` on both databases
+
+It ends by printing `\du forgelake` and `\l forgelake_source*`. To check again later:
+
+```powershell
+psql -U postgres -h 127.0.0.1 -c "\du forgelake" -c "\l forgelake_source*"
+```
+
+### Password file: `~/.pgpass`
+
+The code never handles the password. libpq reads it from `~/.pgpass` in the **Ubuntu-24.04** distro. This machine also has a distro named plain `Ubuntu`, and the Start-menu "Ubuntu" entry opens that one, so start the shell with `wsl -d Ubuntu-24.04`. Then:
+
+```bash
+install -m 600 /dev/null ~/.pgpass
+read -rs -p "forgelake password: " PW; echo
+printf '127.0.0.1:5432:*:forgelake:%s\n' "$PW" >> ~/.pgpass; unset PW
+stat -c %a ~/.pgpass    # 600
+```
+
+If the password contains `:` or `\`, escape each one with a backslash in that file. Check the connection from the repository:
+
+```bash
+.venv/bin/python -c "from forgelake.sources.db import connect; print(connect().execute('select current_user, current_database()').fetchone())"
+# ('forgelake', 'forgelake_source')
+```
+
+`PGPASSWORD` also works, but keep it out of shell history and out of the repository.
+
+**Rollback:** as `postgres`, run `DROP DATABASE forgelake_source; DROP DATABASE forgelake_source_test; DROP ROLE forgelake;`, then delete `~/.pgpass`.
 
 ## Configuration
 
@@ -88,6 +164,11 @@ Test suite:
 | `FORGELAKE_SPARK_DRIVER_MEMORY` | `4g` | Driver JVM heap. Only applies when the first session in a process starts. |
 | `FORGELAKE_SPARK_SHUFFLE_PARTITIONS` | `8` | `spark.sql.shuffle.partitions` |
 | `FORGELAKE_CHECK_STEP_TIMEOUT` | `300` | Seconds before an environment-check step counts as hung |
+| `FORGELAKE_PG_HOST` | `127.0.0.1` | Source PostgreSQL host |
+| `FORGELAKE_PG_PORT` | `5432` | Source PostgreSQL port |
+| `FORGELAKE_PG_DATABASE` | `forgelake_source` | Source database used by scripts |
+| `FORGELAKE_PG_USER` | `forgelake` | Source database role |
+| `FORGELAKE_PG_TEST_DATABASE` | `forgelake_source_test` | Database the `postgres`-marked tests rebuild and use |
 
 Keyword arguments to `forgelake.utils.spark.get_spark()` take precedence over these variables. The shared session always uses `local[*]`, time zone `UTC`, and a driver bound to `127.0.0.1`. It also sets `PYSPARK_PYTHON` to the running interpreter if that variable is unset.
 
