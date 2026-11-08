@@ -1,5 +1,14 @@
 schema: spec-driven
 
+context: |
+  ForgeLake_Plan.txt (v1.1) is the master spec; Section 22 holds binding architecture decisions AD-1..AD-7.
+  Python package is `forgelake`. Dev machine is Windows 11, 16 GB RAM: designs must work locally on it,
+  with WSL2/Docker as the documented fallback for Spark.
+  Data flow is fixed: Python extracts -> immutable batches in data/landing/ -> Spark writes Bronze Delta.
+  Every mutable PostgreSQL source table has created_at, updated_at, is_deleted; no hard deletes.
+  Guiding principle: every feature must solve a real data engineering problem; no tech added for its own sake.
+  Execution discipline uses Superpowers skills (TDD, systematic debugging, verification); planning uses OpenSpec.
+
 # Project context (optional)
 # Add only constraints that should guide OpenSpec artifacts and workflows.
 # Include constraints an agent cannot infer by reading the code.

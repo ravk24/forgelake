@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forgelake"
+version = "0.1.0"
+description = "ForgeLake: manufacturing data lakehouse (PySpark + Delta Lake)"
+requires-python = ">=3.13"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["spark: tests that start a local Spark session (slow)"]

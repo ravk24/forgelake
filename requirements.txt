@@ -1,0 +1,5 @@
+# Pinned runtime - verified by scripts/check_env.py (see docs/setup.md)
+# delta-spark 4.4.1 declares pyspark >=4.0.1,<=4.2.0 ; 4.2.0 is the newest compatible PySpark.
+pyspark==4.2.0
+delta-spark==4.4.1
+pytest==8.3.5
