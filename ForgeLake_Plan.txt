@@ -118,7 +118,7 @@ The following capabilities will be implemented after the core Lakehouse is opera
 | Layer | Technology | Purpose |
 |---|---|---|
 | Programming | Python 3.13 | Ingestion and utility development |
-| Database | PostgreSQL 17 | Source operational database |
+| Database | PostgreSQL 17 | Source operational database: the Windows service `postgresql-x64-17` (17.11), reached from WSL2 on `127.0.0.1:5432` through mirrored networking (Milestone 1; see `docs/setup.md`) |
 | Query Language | SQL | Data querying and modelling |
 | Processing | Apache Spark / PySpark | Distributed processing |
 | Storage | Local filesystem | Data Lake storage |
@@ -417,7 +417,7 @@ The following entities will form the initial source database.
 | Production Record | record_id | References production order |
 | Warehouse | warehouse_id | References factory |
 | Inventory Transaction | transaction_id | References product and warehouse |
-| Sensor Reading | reading_id | References machine |
+| Sensor Reading | event_id | References machine |
 | Quality Inspection | inspection_id | References product and order |
 | Maintenance Record | maintenance_id | References machine |
 
@@ -433,7 +433,7 @@ Ownership and storage, following AD-1:
 
 Every mutable PostgreSQL table has `created_at`, `updated_at` and `is_deleted` columns (AD-2). Rows are soft-deleted, never hard-deleted. Each sensor event carries an `event_id` and an `event_timestamp`. The pipeline adds an `ingestion_timestamp` when it ingests the event.
 
-Detailed column definitions, constraints and relationship diagrams will be maintained in the database design specification.
+Detailed column definitions, identifier formats, constraints, the relationship diagram and the enforcement matrix (which rules PostgreSQL enforces and which are left open for Silver) are in `docs/data-model.md` (Milestone 1). The DDL is in `sql/source/`; the file contracts are in `docs/sources/quality-csv.md` and `docs/sources/sensor-json.md`.
 
 # 9. Data Generation Strategy
 
@@ -780,7 +780,12 @@ forge-lake/
 │   ├── requirements.md
 │   ├── architecture.md
 │   ├── data-model.md
-│   └── decisions.md
+│   ├── decisions.md
+│   └── sources/          (CSV and JSON file contracts, examples)
+│
+├── sql/
+│   ├── admin/            (one-time role and database setup)
+│   └── source/           (versioned source DDL)
 │
 ├── config/
 │
@@ -794,6 +799,7 @@ forge-lake/
 │
 ├── src/
 │   └── forgelake/
+│       ├── sources/      (source connections and contracts)
 │       ├── ingestion/
 │       ├── transformations/
 │       ├── quality/
@@ -880,7 +886,7 @@ Revised in v1.1. Each milestone becomes one OpenSpec change (`/opsx:propose`).
 |---|---|---|
 | — | Requirements and architecture (v1.1 decisions) | Designed |
 | 0 | Environment compatibility spike: Python, Java, PySpark and Delta Lake on Windows | **Done**: Spark runs in WSL2 (native Windows rejected; see Section 5 and `docs/setup.md`) |
-| 1 | Source schema design: PostgreSQL schemas, CSV specification, JSON schema, relationships | Pending |
+| 1 | Source schema design: PostgreSQL schemas, CSV specification, JSON schema, relationships | **Done**: DDL in `sql/source/`, built by `scripts/init_source_db.py`; contracts in `docs/data-model.md` and `docs/sources/` |
 | 2 | Synthetic data generator: volumes, dirty data, updates, late arrivals, soft deletes | Pending |
 | 3 | Landing and Bronze ingestion: Python extraction, immutable batches, Spark Delta writes | Pending |
 | 4 | Silver cleansing: deduplication, type correction, validation, standardisation | Pending |
@@ -890,7 +896,7 @@ Revised in v1.1. Each milestone becomes one OpenSpec change (`/opsx:propose`).
 | 8 | Orchestration and deployment: Airflow, Docker, testing, monitoring | Pending |
 | 9 | Advanced extensions: Kafka, Structured Streaming, cloud, AI | Pending |
 
-**Immediate next step:** Milestone 1. Design the source schemas: three PostgreSQL schemas (production, inventory, maintenance), the quality CSV specification and the sensor JSON schema, following AD-1 and AD-2.
+**Immediate next step:** Milestone 2. Build the synthetic data generator (Section 9): it fills the Milestone 1 PostgreSQL schemas and writes Quality CSV exports and sensor JSON Lines files to their contracts, with `--seed`, `--dirty-rate`, a clean mode and the six run scenarios (AD-3).
 
 # 22. Architecture Decision Log
 

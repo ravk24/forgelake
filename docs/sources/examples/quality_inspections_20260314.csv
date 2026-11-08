@@ -1,0 +1,7 @@
+inspection_id,order_id,product_id,factory_id,inspection_timestamp,inspector,inspected_quantity,accepted_quantity,rejected_quantity,defect_count,defect_type,quality_status,remarks
+INS-00000101,PO-0000123,PRD-00042,FAC-001,2026-03-14T08:15:00+01:00,A. Weber,50,49,1,1,surface_scratch,passed,"Minor scratch, within tolerance"
+INS-00000102,PO-0000123,PRD-00042,FAC-001,2026-03-14T10:40:00+01:00,A. Weber,50,50,0,0,,passed,
+INS-00000103,PO-0000131,PRD-00017,FAC-002,2026-03-14T09:05:00-05:00,J. Ortiz,40,32,8,9,dimension_out_of_tolerance,failed,"Bore 0.2 mm oversize, returned to line 3"
+INS-00000104,PO-0000131,PRD-00017,FAC-002,2026-03-14T13:30:00,J. Ortiz,20,15,5,5,weld_porosity,rework,Re-weld seam B
+INS-00000103,PO-0000131,PRD-00017,FAC-002,2026-03-14T09:05:00-05:00,J. Ortiz,40,32,8,9,dimension_out_of_tolerance,failed,"Bore 0.2 mm oversize, returned to line 3"
+INS-00000105,PO-0000140,PRD-00042,FAC-001,2026-03-14T15:55:00+01:00,M. Keller,30,30,0,0,,passed,Spot check after tool change
