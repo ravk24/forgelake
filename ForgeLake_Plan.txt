@@ -5,7 +5,7 @@
 **Package name:** `forgelake` (repository: `forge-lake`)
 **Project Type:** Enterprise Data Engineering  
 **Domain:** Heavy Equipment Manufacturing  
-**Development Environment:** Windows – Local Development  
+**Development Environment:** Windows 11 host, with Spark running in WSL2 (Ubuntu-24.04), local development  
 **Architecture:** Medallion Lakehouse (Bronze, Silver, Gold)  
 **Primary Processing Engine:** Apache Spark (PySpark)  
 **Storage Format:** Parquet and Delta Lake  
@@ -127,13 +127,16 @@ The following capabilities will be implemented after the core Lakehouse is opera
 | Pipeline execution | Python runner | Initial pipeline execution (AD-5) |
 | Orchestration | Apache Airflow | Future: pipeline scheduling (needs Docker or WSL2) |
 | Version Control | Git / GitHub | Source code management |
-| Containerisation | Docker / WSL2 | Fallback runtime for Spark if native Windows fails (AD-6); Airflow later |
+| Spark runtime | WSL2 (Ubuntu-24.04) | Runs Spark and the pipeline; chosen by the Milestone 0 spike after native Windows proved unreliable (AD-6) |
+| Containerisation | Docker | Future: Airflow and deployment (Milestone 8) |
 | Testing | Pytest | Automated testing |
 | Visualisation | Streamlit | Optional analytical interface |
 
 Technology versions and dependencies must be pinned to mutually compatible releases before implementation. The environment spike (Milestone 0, AD-6) finds and pins these versions.
 
-Verified on the development machine (2026-11-07): Python 3.13.5 and OpenJDK 17.0.20.1 are installed. `JAVA_HOME` and `HADOOP_HOME` are not set. The Docker CLI is installed, but its engine was not running. WSL2 is available, with Ubuntu-24.04 installed.
+**Verified runtime (Milestone 0, 2026-11-07):** WSL2 (Ubuntu-24.04) on the Windows 11 host, running Python 3.13.15 (installed with `uv`), OpenJDK 17.0.20.1, PySpark 4.2.0 (bundling Hadoop 3.5.0 and Scala 2.13) and delta-spark 4.4.1, pinned with `==` in `requirements.txt`. The repository lives at `~/forge-lake` in the Linux filesystem. `scripts/check_env.py` verifies Delta write, read and `MERGE`.
+
+Native Windows was tried first and rejected under AD-6. Delta worked with the `cdarlint/winutils` hadoop-3.3.6 binaries, but about 1 in 4 runs hung forever at Spark startup. On WSL2, 10 of 10 checks passed, and the test suite runs in about 26 s against about 120 s on Windows. `docs/setup.md` has the exact setup steps and the record of the native attempt.
 
 # 6. High-Level Architecture
 
@@ -630,7 +633,7 @@ Performance benchmarks should compare processing times under different configura
 
 Development hardware:
 
-- Operating System: Windows.
+- Operating System: Windows 11, with Spark running in WSL2 (Ubuntu-24.04). By default WSL2 gets 7 GB of the 16 GB RAM; change this in `.wslconfig`.
 - Processor: Intel Core i7, 12th Generation.
 - RAM: 16 GB.
 - Available Disk Space: Approximately 120 GB.
@@ -876,7 +879,7 @@ Revised in v1.1. Each milestone becomes one OpenSpec change (`/opsx:propose`).
 | Milestone | Description | Status |
 |---|---|---|
 | — | Requirements and architecture (v1.1 decisions) | Designed |
-| 0 | Environment compatibility spike: Python, Java, PySpark and Delta Lake on Windows | **Next** |
+| 0 | Environment compatibility spike: Python, Java, PySpark and Delta Lake on Windows | **Done**: Spark runs in WSL2 (native Windows rejected; see Section 5 and `docs/setup.md`) |
 | 1 | Source schema design: PostgreSQL schemas, CSV specification, JSON schema, relationships | Pending |
 | 2 | Synthetic data generator: volumes, dirty data, updates, late arrivals, soft deletes | Pending |
 | 3 | Landing and Bronze ingestion: Python extraction, immutable batches, Spark Delta writes | Pending |
@@ -887,7 +890,7 @@ Revised in v1.1. Each milestone becomes one OpenSpec change (`/opsx:propose`).
 | 8 | Orchestration and deployment: Airflow, Docker, testing, monitoring | Pending |
 | 9 | Advanced extensions: Kafka, Structured Streaming, cloud, AI | Pending |
 
-**Immediate next step:** Milestone 0. Prove that PySpark and Delta Lake (write, read, `MERGE`) work on this machine, and pin the versions that work, before designing schemas.
+**Immediate next step:** Milestone 1. Design the source schemas: three PostgreSQL schemas (production, inventory, maintenance), the quality CSV specification and the sensor JSON schema, following AD-1 and AD-2.
 
 # 22. Architecture Decision Log
 

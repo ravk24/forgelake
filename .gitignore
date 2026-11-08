@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Data (generated, never committed)
+data/
+
+# Spark / Delta local artefacts
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+
+# Scratch notes
+explore-notes.md
+
+# Personal summary (not committed)
+project_brief.md
